@@ -131,6 +131,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                 entities.append(
                     OmniLogicChlorinatorSaltLevelSensorEntity(coordinator=coordinator, context=system_id, sensor_type="instant")
                 )
+                entities.append(
+                    OmniLogicChlorinatorSaltCellSensor(coordinator=coordinator, context=system_id)
+                )
+                
             case ChlorinatorDispenserType.LIQUID:
                 # It looks like there are no liquid sensors exposed in the telemetry
                 pass
@@ -270,6 +274,34 @@ class OmniLogicChlorinatorSaltLevelSensorEntity(OmniLogicEntity[EntityIndexChlor
     def name(self) -> Any:
         return f"{self.data.msp_config.name} {self._sensor_type.capitalize()} Salt Level"
 
+class OmniLogicChlorinatorSaltCellSensor(OmniLogicEntity[EntityIndexChlorinator], SensorEntity):
+    def __init__(self, coordinator: OmniLogicCoordinator, context: int) -> None:
+        super().__init__(coordinator, context)
+        
+    @property
+    def name(self) -> Any:
+        return f"{self.data.msp_config.name} Salt Cell Status"
+    
+    @property
+    def native_value(self) -> StateType | date | datetime | Decimal:
+        is_on =  (self.data.telemetry.status_raw & 0b00000100) != 0
+        is_init = (self.data.telemetry.status_raw & 0b00000010) != 0
+        polarity_k1 = (self.data.telemetry.status_raw & 0b01000000) != 0
+        polarity_k2 = (self.data.telemetry.status_raw & 0b10000000) != 0
+
+        if not is_on:
+            return "OFF"
+        
+        if not is_init:
+            return "Init"
+        
+        if polarity_k1:
+            return "K1"
+        
+        if polarity_k2:
+            return "K2"
+        
+        return self.data.telemetry.status_raw
 
 class OmniLogicCSADAcidPhEntity(OmniLogicEntity[EntityIndexCSAD], SensorEntity):
     _attr_device_class = SensorDeviceClass.PH
